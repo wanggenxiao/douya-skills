@@ -129,6 +129,48 @@ def insert_toc(doc, levels: int, title: str):
             body.append(p._p)
 
 
+def refresh_fields(docx_path: Path) -> int:
+    """用 Word COM 自动更新目录与全文域。
+    返回 0=成功 / 2=Word或pywin32不可用 / 3=更新失败。
+    失败不影响文档本身，用户仍可在 Word 里手动 F9。
+    """
+    try:
+        import win32com.client as win32
+    except Exception:
+        return 2
+
+    word = doc = None
+    try:
+        word = win32.DispatchEx("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = False
+        doc = word.Documents.Open(str(docx_path))
+        n = doc.TablesOfContents.Count
+        for i in range(1, n + 1):
+            doc.TablesOfContents(i).Update()
+        try:
+            doc.Fields.Update()
+        except Exception:
+            pass
+        doc.Save()
+        print(f"[更新] Word 已自动刷新目录，共 {n} 个")
+        return 0
+    except Exception as e:
+        print(f"[warn] Word 自动更新失败: {e}")
+        return 3
+    finally:
+        try:
+            if doc is not None:
+                doc.Close(False)
+        except Exception:
+            pass
+        try:
+            if word is not None:
+                word.Quit()
+        except Exception:
+            pass
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="给 docx 插入 TOC 目录域")
     ap.add_argument("--docx", required=True, help="输入 .docx 路径")
@@ -138,6 +180,8 @@ def main() -> int:
     ap.add_argument("--auto-style", action="store_true",
                     help="文档没用标题样式时，按 1/1.1/1.1.1 编号自动套上")
     ap.add_argument("--dry-run", action="store_true", help="只体检不写文件")
+    ap.add_argument("--no-update", action="store_true",
+                    help="不调用 Word 自动更新域（默认会自动更新，装了 Word 的话）")
     args = ap.parse_args()
 
     src = Path(args.docx).resolve()
@@ -178,8 +222,21 @@ def main() -> int:
     insert_toc(doc, args.levels, args.title)
     doc.save(str(out))
     print(f"[完成] 已写出: {out}")
-    print("[下一步] 用 Word 打开 → 弹窗选「是」更新域；")
-    print("         或 Ctrl+A 全选后按 F9。不更新的话页码是空的，这是正常现象。")
+
+    if args.no_update:
+        print("[跳过] 未自动更新域。用 Word 打开后 Ctrl+A 再按 F9 即可生成目录和页码。")
+        return 0
+
+    rc = refresh_fields(out)
+    if rc == 0:
+        print("[完成] 目录和页码已自动生成，直接打开就能看到，不用再按 F9。")
+    elif rc == 2:
+        print("[提示] 这台电脑没装 Word（或缺 pywin32），没法自动更新页码。")
+        print("       文档是好的，用 Word/WPS 打开后 Ctrl+A 再按 F9 即可。")
+        print("       想自动更新的话：pip install pywin32")
+    else:
+        print("[提示] 自动更新没成功，但文档是好的。")
+        print("       用 Word 打开后 Ctrl+A 再按 F9 即可生成目录和页码。")
     return 0
 
 
