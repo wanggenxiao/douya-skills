@@ -1,0 +1,27 @@
+# ===== 绝不能提交的：本地环境 =====
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== 模型 / 大文件 =====
+*.pt
+*.pth
+*.onnx
+*.safetensors
+models/
+.cache/
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# ===== 输出产物 =====
+*_mineru/
+output/
+_scratch/
