@@ -61,9 +61,48 @@ venv\Scripts\python scripts\run_mineru.py --pdf "随便一个.pdf"
 mineru-pdf-to-markdown/
 ├── SKILL.md
 ├── README.md
-├── scripts/run_mineru.py
-└── venv/              ← 新装出来的，3~5GB，不上传 GitHub
+├── scripts/
+│   ├── run_mineru.py             ← 转换
+│   ├── verify_transcription.py   ← 校核（要下一节那个环境才能跑）
+│   └── check_skeleton.py         ← 骨架校验（规范类文档专用）
+├── venv/              ← 新装出来的，3~5GB，不上传 GitHub
+└── verify_venv/       ← 校核用，下一节装，几十 MB
 ```
+
+---
+
+## ★ 还要装第二个环境（校核用，几十 MB，很快）
+
+转换只是上半场。**转出来对不对，得有东西去核**——这就是 `verify_transcription.py`
+和 `check_skeleton.py` 干的活（详见 SKILL.md「转完必须校核」那节）。
+
+⚠ **它必须装在一个单独的环境里，不能装进上面那个 `venv`。**
+原因：校核要用 `pdfplumber`，它和 mineru 依赖的 `pypdfium2` / `pdftext` **版本打架**。
+装到一起，**会把你刚装好的 mineru 搞坏**。
+
+同样可以让 AI 替你装，把这段发给它：
+
+```
+在这个 skill 目录下再建一个独立的虚拟环境，专门跑校核脚本：
+1. python -m venv verify_venv
+2. 用 verify_venv 的 pip 安装：pip install pdfplumber pypdfium2 pillow
+3. 装完告诉我 verify_venv 里 python 的完整路径
+注意：不要装进已有的 venv 里，那个是跑 MinerU 的，依赖会冲突。
+```
+
+手动装（Windows）：
+
+```
+python -m venv verify_venv
+verify_venv\Scripts\pip install pdfplumber pypdfium2 pillow
+```
+
+**装完你手上会有两个 python，别用混了**：
+
+| 干什么 | 用哪个 |
+|---|---|
+| 转换 PDF（`run_mineru.py`） | `venv` 里那个 |
+| 校核（`verify_transcription.py` / `check_skeleton.py`） | `verify_venv` 里那个 |
 
 ---
 
@@ -89,6 +128,13 @@ mineru-pdf-to-markdown/
 
 你会发现它并不是 100% 准确的 —— **这很正常，也是你必须亲眼看到的一件事**。
 
-具体怎么建立自己的核对关口，看 `SKILL.md` 里的「输出可信度红线」和「总原则」两节。
+具体怎么建立自己的核对关口，看 `SKILL.md` 里的「**转完必须校核**」「输出可信度红线」「总原则」三节。
+
+⚠ 那里头有一条最要紧的：**四种典型错误，自动校核只抓得到两种**——
+合并单元格错位、整行丢失这两种，脚本会告诉你「一致，通过」。
+
+> **不是没做检查，是检查通过了，错还在那儿。**
+
+关键的那几张表，只有打开原页看才算数。
 
 > **不要求 100% 准确，要求错误可发现。**
