@@ -15,7 +15,8 @@ description: 用 MinerU 本地版把 PDF（含扫描件、公式、表格、多�
 - 页眉页脚自动剥除
 - 抽出图片到子目录
 
-输出文件：`<输出目录>/<pdf名>/auto/<pdf名>.md` + `images/` 子目录。
+输出文件：`<输出目录>/…/<pdf名>.md` + `images/` 子目录
+（**两个大版本的目录层级不同，见下文「输出位置铁律」；找 md 一律用 `rglob("*.md")`，别写死路径**）。
 
 ## 关键事实（必读）
 
@@ -25,26 +26,57 @@ description: 用 MinerU 本地版把 PDF（含扫描件、公式、表格、多�
 
 用户报"200 页限制"时，提醒他用这个 skill（本地版）而不是桌面客户端。
 
-## ★ MinerU 2.x / 4.x 双版本自适应（2026-09-18）
+## ★★ MinerU 4.x 适配（2026-09-18 本机装 4.0.2 实测，非照文档推断）
 
-**MinerU 4.0 把 CLI 彻底改了**，2.x 的写法在 4.0 上完全无效——这是学员反馈"skill 调不起来"的根因。
-`run_mineru.py` 现在会**自动探测本机装的是哪一版**，按版本构造命令，**对外参数不变**。
+**MinerU 4.0（2026-09-16 发布）把 CLI 彻底重构了**，3.x/2.x 的写法完全失效——
+这是学员反馈"skill 调不起来"的根因。`run_mineru.py` 已自动适配，**对外参数不变**。
 
-| 概念 | 2.x | 4.x |
+### ⚠ 最容易踩的坑：`mineru` 和 `mineru-kit` 是两套【不同的 CLI】，不是别名
+
+官方 README 说 both valid，**误导**。实测命令集和默认值都不同：
+
+| | `mineru parse` | `mineru-kit parse` ← **本 skill 用这个** |
 |:--|:--|:--|
-| 命令名 | `mineru` | `mineru` 或 `mineru-kit`（互为别名） |
-| 子命令 | 无 | `parse` |
-| 输入 | `-p <pdf>` | 位置参数 `<pdf>` |
-| **输出** | `-o <目录>` | **`-o <文件.md>`** ← 语义变了 |
+| 定位 | 新"个人文档中心"（doclib+服务） | 传统解析器 |
+| 前置条件 | **必须先 `mineru server start`**；且 `parse_server.local.mode` 默认 `disabled`，basic/standard/advanced 直接报 **"Local parse-server is disabled"** | **无，开箱即用** |
+| `--pages` 默认 | ★ **只转前 10 页**（静默截断！） | **全部页面** |
+
+→ **同名子命令、默认值相反**。查文档/看别人的命令时，务必先看清是哪一个。
+
+### 4.x 真实参数（`mineru-kit parse --help` 实测）
+
+```
+mineru-kit parse <文件或目录> -o <输出> --tier <档位> [--pages 1-5,8,r3-r1|all]
+                 [--ocr-mode auto|txt|ocr] [--format markdown|middle_json|zip]
+                 [--remote --remote-url --api-key] [--disable-image-analysis]
+```
+- `-o` 给**目录**即可，会自动拼 `<PDF名>.md`
+- **没有 `--force`**（那是 `mineru parse` 的参数）
+- `--ocr-mode` **确实存在**（官方 README 没写，但 `--help` 里有）
+
+### 版本对照
+
+| 概念 | 3.x / 2.x | 4.x |
+|:--|:--|:--|
+| 命令 | `mineru` | `mineru-kit parse` |
+| 输入 | `-p <pdf>` | 位置参数 |
+| 输出 | `-o <目录>` | `-o <目录>`（同样给目录） |
 | 质量 | `-b pipeline/vlm-*` | `--tier flash/basic/standard/advanced` |
-| 页范围 | `-s 0 -e 49`（**0-based**） | `--pages 1-50`（**1-based 闭区间**） |
-| 语言/解析方式 | `-l ch` / `-m auto` | 无，统一并入 `--tier` |
+| 页范围 | `-s 0 -e 49`（0-based） | `--pages 1-50`（**1-based 闭区间**，脚本自动换算） |
+| 语言 | `-l ch` | 无（自动） |
+| 解析方式 | `-m auto/txt/ocr` | `--ocr-mode auto/txt/ocr` |
 
-⚠ **官方 README 里没有 `--ocr-mode` 这个参数**，看到有人这么用先核实再抄。
-⚠ 官方明确提示：**别拿 `flash` 当最终阅读质量**（只适合建索引/检索）。
+### ★ 4.x 把图片 base64 内嵌进 md —— 脚本会自动剥离
 
-**排障**：`--dry-run` 只打印命令不执行；`--force-major 2|4` 跳过探测强制指定版本。
-换版本或报"未知参数"时，先 `--dry-run` 把命令打出来核对。
+4.x 不再把图抽到 `images/`，而是**整张图 base64 塞进 md**。
+实测 13 页文档 → md **4.1MB，正文仅 2949 字**，其余全是 base64；`--disable-image-analysis` 也关不掉。
+对"转出来喂 AI 读"这个用途是**倒退**（白烧 token）。
+
+→ **脚本跑完自动剥离**：图存到 `images/*.png`，md 改回相对路径引用。
+实测 **4175KB → 6KB**，23 张图零损坏、零 base64 残留。要保留内嵌图加 `--keep-base64`。
+
+**其他**：首次用 `--tier standard/advanced` 会自动下模型（实测约 4~5 分钟），一次性。
+**排障**：`--dry-run` 只打印命令不执行；`--force-major 2|4` 强制指定版本（会连可执行文件一起选对）。
 
 ## 调用方式
 
@@ -90,9 +122,9 @@ description: 用 MinerU 本地版把 PDF（含扫描件、公式、表格、多�
 **转录产物一律放在原 PDF 同一目录下，与原件并排。**
 **即不传 `--out` 就是对的，不要画蛇添足指到别处。**
 
-默认输出目录都是 `<PDF父目录>/<PDF名>_mineru/`，但**里面的结构两版不同**：
-- **2.x**：`<PDF名>_mineru/<PDF名>/auto/<PDF名>.md` + `images/`
-- **4.x**：`<PDF名>_mineru/<PDF名>.md`（`-o` 直接指向该文件）
+默认输出目录都是 `<PDF父目录>/<PDF名>_mineru/`，但**里面的结构两版不同**（实测）：
+- **3.x/2.x**：`<PDF名>_mineru/<PDF名>/auto/<PDF名>.md` + `images/`
+- **4.x**：`<PDF名>_mineru/<PDF名>.md` + `images/`（images 是本脚本剥离 base64 后生成的）
 
 → 所以**别把产物路径写死在别的脚本里**，要找 md 就 `rglob("*.md")`。
 
@@ -116,7 +148,18 @@ description: 用 MinerU 本地版把 PDF（含扫描件、公式、表格、多�
 **判别要点：产物是不是"资料的可读版本"——是，就并排；只有脚本/日志才进 _scratch。
 "我只是试一下"不构成例外。**
 
-## 后端选择建议
+## 后端 / 档位选择建议
+
+### 4.x：用 `--tier`（backend 已废弃）
+
+| 场景 | 推荐 | 说明 |
+|---|---|---|
+| 国标/行标/地标规范、图纸、表格公式密集 | `advanced` | 难文档质量最好，最慢 |
+| 一般中文文档、可搜索 PDF | `standard`（默认） | 官方定位的"正常阅读"档 |
+| 只是建索引 / 先摸一眼有什么 | `flash` | 最快，**官方明确说别当最终稿** |
+| 本地私密快速阅读 | `basic` | 中速 |
+
+### 3.x / 2.x：用 `--backend`
 
 | 场景 | 推荐 backend | 原因 |
 |---|---|---|
